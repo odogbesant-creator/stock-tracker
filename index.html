@@ -36,6 +36,10 @@
   .auth-btn:disabled{opacity:0.5;cursor:not-allowed;}
   .auth-error{font-family:'Space Mono',monospace;font-size:0.65rem;color:var(--red);text-align:center;min-height:1rem;}
   .auth-success{font-family:'Space Mono',monospace;font-size:0.65rem;color:var(--green);text-align:center;min-height:1rem;}
+  .auth-link{font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--muted);text-align:center;cursor:pointer;text-decoration:underline;margin-top:0.25rem;}
+  .auth-link:hover{color:var(--green);}
+  #resetScreen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:none;align-items:center;justify-content:center;}
+  #resetScreen.open{display:flex;}
 
   /* ── ALERT BANNER ── */
   #alertBanner{position:fixed;top:0;left:0;right:0;z-index:500;display:none;flex-direction:column;}
@@ -203,6 +207,30 @@
       <div class="auth-error" id="authError"></div>
       <div class="auth-success" id="authSuccess"></div>
       <button class="auth-btn" id="authBtn" onclick="authSubmit()">Sign In</button>
+      <div class="auth-link" id="forgotLink" onclick="showForgotPassword()">Forgot password?</div>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD SCREEN -->
+<div id="resetScreen">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-dot"></div>
+      <h1>Reset Password</h1>
+    </div>
+    <div class="auth-form">
+      <div class="auth-field">
+        <label>New Password</label>
+        <input type="password" id="newPassword" placeholder="Enter new password" onkeydown="if(event.key==='Enter') submitNewPassword()">
+      </div>
+      <div class="auth-field">
+        <label>Confirm New Password</label>
+        <input type="password" id="confirmPassword" placeholder="Confirm new password" onkeydown="if(event.key==='Enter') submitNewPassword()">
+      </div>
+      <div class="auth-error" id="resetError"></div>
+      <div class="auth-success" id="resetSuccess"></div>
+      <button class="auth-btn" id="resetBtn" onclick="submitNewPassword()">Set New Password</button>
     </div>
   </div>
 </div>
@@ -310,9 +338,19 @@ window.addEventListener('DOMContentLoaded', async()=>{
     currentUser=session.user;
     showApp();
   }
-  sb.auth.onAuthStateChange((_,session)=>{
-    if(session){currentUser=session.user;showApp();}
-    else{currentUser=null;showAuth();}
+  sb.auth.onAuthStateChange((event,session)=>{
+    if(event==='PASSWORD_RECOVERY'){
+      // User clicked reset link — show password reset screen
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('resetScreen').classList.add('open');
+    } else if(session){
+      currentUser=session.user;
+      document.getElementById('resetScreen').classList.remove('open');
+      showApp();
+    } else {
+      currentUser=null;
+      showAuth();
+    }
   });
 });
 
@@ -341,6 +379,38 @@ async function authSubmit(){
     const{error}=await sb.auth.signUp({email,password});
     if(error){errEl.textContent=error.message;btn.disabled=false;btn.textContent='Create Account';}
     else{sucEl.textContent='Account created! Check your email to confirm, then sign in.';btn.disabled=false;btn.textContent='Create Account';}
+  }
+}
+
+async function showForgotPassword(){
+  const email=document.getElementById('authEmail').value.trim();
+  const errEl=document.getElementById('authError');
+  const sucEl=document.getElementById('authSuccess');
+  errEl.textContent='';sucEl.textContent='';
+  if(!email){errEl.textContent='Enter your email above first.';return;}
+  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:'https://stock-tracker-woad-mu.vercel.app'});
+  if(error){errEl.textContent=error.message;}
+  else{sucEl.textContent='Password reset email sent! Check your inbox.';}
+}
+
+async function submitNewPassword(){
+  const newPw=document.getElementById('newPassword').value;
+  const confirmPw=document.getElementById('confirmPassword').value;
+  const errEl=document.getElementById('resetError');
+  const sucEl=document.getElementById('resetSuccess');
+  const btn=document.getElementById('resetBtn');
+  errEl.textContent='';sucEl.textContent='';
+  if(!newPw||newPw.length<6){errEl.textContent='Password must be at least 6 characters.';return;}
+  if(newPw!==confirmPw){errEl.textContent='Passwords do not match.';return;}
+  btn.disabled=true;btn.textContent='Saving...';
+  const{error}=await sb.auth.updateUser({password:newPw});
+  if(error){errEl.textContent=error.message;btn.disabled=false;btn.textContent='Set New Password';}
+  else{
+    sucEl.textContent='Password updated! Taking you to your portfolio...';
+    setTimeout(()=>{
+      document.getElementById('resetScreen').classList.remove('open');
+      showApp();
+    },1500);
   }
 }
 
