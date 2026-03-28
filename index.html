@@ -333,25 +333,42 @@ let authMode='login';
 // ── AUTH ──
 window.addEventListener('DOMContentLoaded', async()=>{
   document.getElementById('iD').value=new Date().toISOString().split('T')[0];
-  const {data:{session}}=await sb.auth.getSession();
-  if(session){
-    currentUser=session.user;
-    showApp();
+
+  // Check if this is a password recovery link (has type=recovery in URL hash)
+  const hash = window.location.hash;
+  const params = new URLSearchParams(hash.replace('#',''));
+  const type = params.get('type');
+
+  if(type === 'recovery'){
+    // Show reset screen immediately — Supabase will fire PASSWORD_RECOVERY event
+    document.getElementById('authScreen').classList.add('hidden');
+    document.getElementById('resetScreen').classList.add('open');
   }
-  sb.auth.onAuthStateChange((event,session)=>{
-    if(event==='PASSWORD_RECOVERY'){
-      // User clicked reset link — show password reset screen
+
+  sb.auth.onAuthStateChange((event, session)=>{
+    if(event === 'PASSWORD_RECOVERY'){
       document.getElementById('authScreen').classList.add('hidden');
       document.getElementById('resetScreen').classList.add('open');
-    } else if(session){
-      currentUser=session.user;
+    } else if(event === 'SIGNED_IN' && document.getElementById('resetScreen').classList.contains('open')){
+      // Signed in via recovery link — stay on reset screen until they set password
+      currentUser = session.user;
+    } else if(session && event !== 'INITIAL_SESSION'){
+      currentUser = session.user;
       document.getElementById('resetScreen').classList.remove('open');
       showApp();
-    } else {
-      currentUser=null;
+    } else if(!session){
+      currentUser = null;
       showAuth();
     }
   });
+
+  const {data:{session}} = await sb.auth.getSession();
+  if(session && type !== 'recovery'){
+    currentUser = session.user;
+    showApp();
+  } else if(!session && type !== 'recovery'){
+    showAuth();
+  }
 });
 
 function switchAuthTab(mode,el){
